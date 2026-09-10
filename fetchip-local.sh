@@ -1,4 +1,10 @@
-f ! command -v jq &> /dev/null; then    echo "Error: jq is not installed. Pleas
+root@37648:~# cat fetchipisp.sh
+#!/bin/bash# Get your WAN IP and fetch country/ISP (no
+ hostname resolution)
+# Usage: ./get_my_ip_info.sh
+
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then    echo "Error: jq is not installed. Pleas
 e install jq to run this script."    echo "On Debian/Ubuntu: sudo apt-get in
 stall jq"    echo "On RHEL/CentOS: sudo yum install
 jq"
@@ -78,5 +84,3 @@ main() {
 
 # --- Script Execution ---
 main
-
-root@37648:~#
