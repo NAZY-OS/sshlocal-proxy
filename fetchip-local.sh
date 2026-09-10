@@ -72,10 +72,10 @@ get_ip_details() {
             echo -e "\033[1mCoordinates:\033[0m $(echo "$combined_info" | jq -r '.latitude // "Unknown"'), $(echo "$combined_info" | jq -r '.longitude // "Unknown"')"
             echo -e "\033[1mTimezone:\033[0m $(echo "$combined_info" | jq -r '.timezone // "Unknown"')"
             echo -e "\033[1mISP:\033[0m $(echo "$combined_info" | jq -r '.isp // "Unknown"')"
-            echo -e "\033[1mOrganization:\033[0m $(echo "$combined_info" | jq -r '.organization // "Unknown"')"
+            echo -e "\033[1mOrganization:\033[0m $(echo "$combined_info" | jq -r '.org // "Unknown"')"
             echo -e "\033[1mASN:\033[0m $(echo "$combined_info" | jq -r '.asn // "Unknown"')"
-            echo -e "\033[1mSource:\033[0m $(echo "$combined_info" | jq -r '.source // "Unknown")'"
-            echo -e "\033[1mTimestamp:\033[0m $(echo "$combined_info" | jq -r '.timestamp // "Unknown"')"
+            echo -e "\033[1mSource:\033[0m $(echo "$combined_info" | jq -r '.source1 // .source2 // "Unknown"')"
+            echo -e "\033[1mTimestamp:\033[0m $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             return 0
         fi
     done
