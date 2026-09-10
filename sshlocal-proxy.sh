@@ -1,6 +1,6 @@
 #!/bin/bash
-# Version: 1.2 RC
-# Author: nazy-os
+# Version: 1.3
+# Author: nazy-os (überarbeitet)
 # Scriptname: sshlocal-proxy.sh
 # License: MIT
 
@@ -10,7 +10,7 @@
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
+# in the the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
@@ -30,7 +30,8 @@
 DEFAULT_PORT=10800
 DEFAULT_SSH_PORT=22
 CONFIG_FILE="$HOME/.ssh/sshlocal-proxy.conf"
-SSH_KEY_FILE="$HOME/.ssh/id_ed25519"
+SSH_KEY_ED25519="$HOME/.ssh/id_ed25519"
+SSH_KEY_RSA="$HOME/.ssh/id_rsa"
 RSA_PASSWORD=""
 
 # Function to display usage information
@@ -48,22 +49,45 @@ usage() {
 
 # Function to generate Ed25519 SSH key if none exists
 generate_ssh_key() {
-    if [ ! -f "$SSH_KEY_FILE" ]; then
-        echo "No SSH key found at $SSH_KEY_FILE"
+    if [ ! -f "$SSH_KEY_ED25519" ]; then
+        echo "No Ed25519 SSH key found at $SSH_KEY_ED25519"
         read -p "Generate a new Ed25519 key? (y/n): " choice
         case "$choice" in
             y|Y)
                 echo "Generating new Ed25519 SSH key..."
-                ssh-keygen -t ed25519 -a 100 -f "$SSH_KEY_FILE" -C "sshlocal-proxy"
+                ssh-keygen -t ed25519 -a 100 -f "$SSH_KEY_ED25519" -C "sshlocal-proxy"
                 if [ $? -ne 0 ]; then
-                    echo "Error: Failed to generate SSH key!" >&2
+                    echo "Error: Failed to generate Ed25519 SSH key!" >&2
                     exit 1
                 fi
-                chmod 600 "$SSH_KEY_FILE"
-                echo "SSH key generated at $SSH_KEY_FILE"
+                chmod 600 "$SSH_KEY_ED25519"
+                echo "Ed25519 SSH key generated at $SSH_KEY_ED25519"
                 ;;
             *)
-                echo "Using existing SSH key or no key authentication"
+                echo "No Ed25519 key generated. Falling back to RSA or password authentication."
+                ;;
+        esac
+    fi
+}
+
+# Function to generate RSA SSH key if Ed25519 is not available
+generate_rsa_key() {
+    if [ ! -f "$SSH_KEY_RSA" ]; then
+        echo "No RSA SSH key found at $SSH_KEY_RSA"
+        read -p "Generate a new RSA key? (y/n): " choice
+        case "$choice" in
+            y|Y)
+                echo "Generating new RSA SSH key..."
+                ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_RSA" -C "sshlocal-proxy"
+                if [ $? -ne 0 ]; then
+                    echo "Error: Failed to generate RSA SSH key!" >&2
+                    exit 1
+                fi
+                chmod 600 "$SSH_KEY_RSA"
+                echo "RSA SSH key generated at $SSH_KEY_RSA"
+                ;;
+            *)
+                echo "No RSA key generated. Falling back to password authentication."
                 ;;
         esac
     fi
@@ -125,11 +149,12 @@ prompt_rsa_password() {
 start_ssh_proxy() {
     echo "Starting SSH SOCKS proxy on port $port..."
 
-    # Check if SSH key exists
-    if [ -f "$SSH_KEY_FILE" ]; then
-        ssh_key_option="-i $SSH_KEY_FILE"
-    else
-        ssh_key_option=""
+    # Determine which SSH key to use
+    ssh_key_option=""
+    if [ -f "$SSH_KEY_ED25519" ]; then
+        ssh_key_option="-i $SSH_KEY_ED25519"
+    elif [ -f "$SSH_KEY_RSA" ]; then
+        ssh_key_option="-i $SSH_KEY_RSA"
     fi
 
     # Use stored RSA password if available
@@ -166,8 +191,16 @@ main() {
     local config_file="$CONFIG_FILE"
     local use_rsapass=false
 
-    # Parse command line options
-    while [[ $# -gt 0 ]]; do
+    # Parse command line options using getopt
+    TEMP=$(getopt -o u:s:p:c:rh --long user:,server:,port:,configfile:,rsapass,help -n "$0" -- "$@")
+    if [ $? != 0 ]; then
+        echo "Error: Failed to parse arguments!" >&2
+        usage
+    fi
+
+    eval set -- "$TEMP"
+
+    while true; do
         case "$1" in
             -u|--user)
                 user="$2"
@@ -192,6 +225,10 @@ main() {
             --help)
                 usage
                 ;;
+            --)
+                shift
+                break
+                ;;
             *)
                 echo "Error: Unknown option $1" >&2
                 usage
@@ -199,8 +236,11 @@ main() {
         esac
     done
 
-    # Generate SSH key if needed
+    # Generate SSH keys if needed
     generate_ssh_key
+    if [ ! -f "$SSH_KEY_ED25519" ]; then
+        generate_rsa_key
+    fi
 
     # If no arguments provided, prompt for all values
     if [[ $# -eq 0 ]]; then
@@ -240,10 +280,12 @@ main() {
             ;;
         *)
             echo "Proxy not started. You can start it later with:"
-            if [ -f "$SSH_KEY_FILE" ]; then
-                echo "ssh -D $port -N -f -C -T -i $SSH_KEY_FILE -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes $user@$server"
+            if [ -f "$SSH_KEY_ED25519" ]; then
+                echo "ssh -D $port -N -f -C -T -i $SSH_KEY_ED25519 -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes $user@$server"
+            elif [ -f "$SSH_KEY_RSA" ]; then
+                echo "ssh -D $port -N -f -C -T -i $SSH_KEY_RSA -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes $user@$server"
             else
-                echo "ssh -D $port -N -f -C -T -o ServerAliveInterval=60 -o ExitOnForwardFailure=yes $user@$server"
+                echo "ssh -D $port -N -f -C -T $user@$server"
             fi
             ;;
     esac
